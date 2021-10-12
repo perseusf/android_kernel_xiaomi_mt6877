@@ -3281,24 +3281,12 @@ static void binder_transaction(struct binder_proc *proc,
 			     (u64)tr->data.ptr.offsets,
 			     (u64)tr->data_size, (u64)tr->offsets_size,
 			     (u64)extra_buffers_size);
-	//MIUI MOD:
-	/*
+
 	if (!reply && !(tr->flags & TF_ONE_WAY))
 		t->from = thread;
 	else
 		t->from = NULL;
-	*/
-	if (!reply && !(tr->flags & TF_ONE_WAY)) {
-		t->from = thread;
-		t->async_from_pid = -1;
-		t->async_from_tid = -1;
-	} else {
-		t->from = NULL;
-		t->async_from_pid = thread->proc->pid;
-		t->async_from_tid = thread->pid;
-	}
-	//END
-	t->sender_euid = task_euid(proc->tsk);
+	t->sender_euid = proc->cred->euid;
 	t->to_proc = target_proc;
 	t->to_thread = target_thread;
 	t->code = tr->code;
