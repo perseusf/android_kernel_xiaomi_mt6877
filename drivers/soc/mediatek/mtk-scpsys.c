@@ -686,41 +686,12 @@ out:
 	return ret;
 }
 
-static int init_clks(struct platform_device *pdev, struct clk **clk)
+static void init_clks(struct platform_device *pdev, struct clk **clk)
 {
 	int i;
 
-	for (i = CLK_NONE + 1; i < CLK_MAX; i++) {
+	for (i = CLK_NONE + 1; i < CLK_MAX; i++)
 		clk[i] = devm_clk_get(&pdev->dev, clk_names[i]);
-		if (IS_ERR(clk[i]))
-			return PTR_ERR(clk[i]);
-	}
-
-	if (i == pd_data->num_domains)
-		return 0;
-
-	scpe.event_type = MTK_SCPSYS_PSTATE;
-	scpe.genpd = genpd;
-	scpe.domain_id = i;
-	blocking_notifier_call_chain(&scpsys_notifier_list, state, &scpe);
-
-	return 0;
-}
-
-static unsigned int mtk_pd_get_performance(struct generic_pm_domain *genpd,
-					   struct dev_pm_opp *opp)
-{
-	struct device_node *np;
-	unsigned int val = 0;
-
-	np = dev_pm_opp_get_of_node(opp);
-
-	if (np) {
-		of_property_read_u32(np, "opp-level", &val);
-		of_node_put(np);
-	}
-
-	return val;
 }
 
 static struct scp *init_scp(struct platform_device *pdev,
@@ -730,7 +701,7 @@ static struct scp *init_scp(struct platform_device *pdev,
 {
 	struct genpd_onecell_data *pd_data;
 	struct resource *res;
-	int i, j, ret;
+	int i, j;
 	struct scp *scp;
 	struct clk *clk[CLK_MAX];
 
@@ -807,9 +778,7 @@ static struct scp *init_scp(struct platform_device *pdev,
 
 	pd_data->num_domains = num;
 
-	ret = init_clks(pdev, clk);
-	if (ret)
-		return ERR_PTR(ret);
+	init_clks(pdev, clk);
 
 	for (i = 0; i < num; i++) {
 		struct scp_domain *scpd = &scp->domains[i];
