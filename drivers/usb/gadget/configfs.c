@@ -1471,63 +1471,33 @@ err_comp_cleanup:
 	return ret;
 }
 
-#ifdef CONFIG_USB_CONFIGFS_UEVENT
-static void android_work(struct work_struct *data)
+static void configfs_composite_unbind(struct usb_gadget *gadget)
 {
-	struct gadget_info *gi = container_of(data, struct gadget_info, work);
-	struct usb_composite_dev *cdev = &gi->cdev;
-	char *disconnected[2] = { "USB_STATE=DISCONNECTED", NULL };
-	char *connected[2]    = { "USB_STATE=CONNECTED", NULL };
-	char *configured[2]   = { "USB_STATE=CONFIGURED", NULL };
-	/* 0-connected 1-configured 2-disconnected*/
-	bool status[3] = { false, false, false };
+	struct usb_composite_dev	*cdev;
+	struct gadget_info		*gi;
 	unsigned long flags;
-	bool uevent_sent = false;
 
-	spin_lock_irqsave(&cdev->lock, flags);
-	if (cdev->config)
-		status[1] = true;
+	/* the gi->lock is hold by the caller */
 
-	if (gi->connected != gi->sw_connected) {
-		if (gi->connected)
-			status[0] = true;
-		else
-			status[2] = true;
-		gi->sw_connected = gi->connected;
-	}
-	spin_unlock_irqrestore(&cdev->lock, flags);
+	cdev = get_gadget_data(gadget);
+	gi = container_of(cdev, struct gadget_info, cdev);
+	spin_lock_irqsave(&gi->spinlock, flags);
+	gi->unbind = 1;
+	spin_unlock_irqrestore(&gi->spinlock, flags);
 
-	if (status[0]) {
-		kobject_uevent_env(&android_device->kobj,
-					KOBJ_CHANGE, connected);
-		pr_info("%s: sent uevent %s\n", __func__, connected[0]);
-		uevent_sent = true;
-	}
-
-	if (status[1]) {
-		kobject_uevent_env(&android_device->kobj,
-					KOBJ_CHANGE, configured);
-		pr_info("%s: sent uevent %s\n", __func__, configured[0]);
-		uevent_sent = true;
-
-		if (IS_ENABLED(CONFIG_MTPROF))
-			bootprof_log("USB configured");
-
-	}
-
-	if (status[2]) {
-		kobject_uevent_env(&android_device->kobj,
-					KOBJ_CHANGE, disconnected);
-		pr_info("%s: sent uevent %s\n", __func__, disconnected[0]);
-		uevent_sent = true;
-	}
-
-	if (!uevent_sent) {
-		pr_info("%s: did not send uevent (%d %d %p)\n", __func__,
-			gi->connected, gi->sw_connected, cdev->config);
-	}
+	kfree(otg_desc[0]);
+	otg_desc[0] = NULL;
+	purge_configs_funcs(gi);
+	composite_dev_cleanup(cdev);
+	usb_ep_autoconfig_reset(cdev->gadget);
+	spin_lock_irqsave(&gi->spinlock, flags);
+	cdev->gadget = NULL;
+	cdev->deactivations = 0;
+	gadget->deactivated = false;
+	set_gadget_data(gadget, NULL);
+	spin_unlock_irqrestore(&gi->spinlock, flags);
 }
-#else
+
 static int configfs_composite_setup(struct usb_gadget *gadget,
 		const struct usb_ctrlrequest *ctrl)
 {
