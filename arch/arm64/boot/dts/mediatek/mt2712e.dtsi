@@ -268,35 +268,99 @@
 		#clock-cells = <1>;
 	};
 
-	gpu: mali@13040000 {
-		compatible = "arm,mali-midgard";
-		reg = <0 0x13040000 0 0x4000>, <0 0x13000000 0 0x20>;
-		interrupts = <GIC_SPI 225 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_SPI 226 IRQ_TYPE_LEVEL_LOW>,
-			     <GIC_SPI 227 IRQ_TYPE_LEVEL_LOW>;
-		interrupt-names = "GPU", "MMU", "JOB";
-		clocks = <&topckgen CLK_TOP_MFG_SEL>,
-			 <&topckgen CLK_TOP_MMPLL>,
-			 <&mfgcfg CLK_MFG_BG3D>;
-		clock-names = "mfg_sel", "mfg_pll", "mfg_bg3d";
-		power-domains = <&scpsys MT2712_POWER_DOMAIN_MFG_SC1>;
-		mp=<2>;
-		#cooling-cells = <2>;
-		#cooling-min-level = <0>;
-		#cooling-max-level = <5>;
-		operating-points = <
-			520000 1000000
-			494000 1000000
-			455000 1000000
-			396500 1000000
-			299000 1000000
-			253500 1000000
-		>;
+	syscfg_pctl_a: syscfg_pctl_a@10005000 {
+		compatible = "mediatek,mt2712-pctl-a-syscfg", "syscon";
+		reg = <0 0x10005000 0 0x1000>;
+	};
 
-		power_model {
-			compatible = "arm,mali-simple-power-model";
-			thermal-zone = "cpu_thermal";
-		};
+	pio: pinctrl@1000b000 {
+		compatible = "mediatek,mt2712-pinctrl";
+		reg = <0 0x1000b000 0 0x1000>;
+		mediatek,pctl-regmap = <&syscfg_pctl_a>;
+		pins-are-numbered;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		interrupts = <GIC_SPI 153 IRQ_TYPE_LEVEL_HIGH>;
+	};
+
+	scpsys: scpsys@10006000 {
+		compatible = "mediatek,mt2712-scpsys", "syscon";
+		#power-domain-cells = <1>;
+		reg = <0 0x10006000 0 0x1000>;
+		clocks = <&topckgen CLK_TOP_MM_SEL>,
+			 <&topckgen CLK_TOP_MFG_SEL>,
+			 <&topckgen CLK_TOP_VENC_SEL>,
+			 <&topckgen CLK_TOP_JPGDEC_SEL>,
+			 <&topckgen CLK_TOP_A1SYS_HP_SEL>,
+			 <&topckgen CLK_TOP_VDEC_SEL>;
+		clock-names = "mm", "mfg", "venc",
+			"jpgdec", "audio", "vdec";
+		infracfg = <&infracfg>;
+	};
+
+	uart5: serial@1000f000 {
+		compatible = "mediatek,mt2712-uart",
+			     "mediatek,mt6577-uart";
+		reg = <0 0x1000f000 0 0x400>;
+		interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&baud_clk>, <&sys_clk>;
+		clock-names = "baud", "bus";
+		status = "disabled";
+	};
+
+	apmixedsys: syscon@10209000 {
+		compatible = "mediatek,mt2712-apmixedsys", "syscon";
+		reg = <0 0x10209000 0 0x1000>;
+		#clock-cells = <1>;
+	};
+
+	mcucfg: syscon@10220000 {
+		compatible = "mediatek,mt2712-mcucfg", "syscon";
+		reg = <0 0x10220000 0 0x1000>;
+		#clock-cells = <1>;
+	};
+
+	sysirq: interrupt-controller@10220a80 {
+		compatible = "mediatek,mt2712-sysirq",
+			     "mediatek,mt6577-sysirq";
+		interrupt-controller;
+		#interrupt-cells = <3>;
+		interrupt-parent = <&gic>;
+		reg = <0 0x10220a80 0 0x40>;
+	};
+
+	gic: interrupt-controller@10510000 {
+		compatible = "arm,gic-400";
+		#interrupt-cells = <3>;
+		interrupt-parent = <&gic>;
+		interrupt-controller;
+		reg = <0 0x10510000 0 0x10000>,
+		      <0 0x10520000 0 0x20000>,
+		      <0 0x10540000 0 0x20000>,
+		      <0 0x10560000 0 0x20000>;
+		interrupts = <GIC_PPI 9
+			 (GIC_CPU_MASK_RAW(0x13) | IRQ_TYPE_LEVEL_HIGH)>;
+	};
+
+	auxadc: adc@11001000 {
+		compatible = "mediatek,mt2712-auxadc";
+		reg = <0 0x11001000 0 0x1000>;
+		clocks = <&pericfg CLK_PERI_AUXADC>;
+		clock-names = "main";
+		#io-channel-cells = <1>;
+		status = "disabled";
+	};
+
+	uart0: serial@11002000 {
+		compatible = "mediatek,mt2712-uart",
+			     "mediatek,mt6577-uart";
+		reg = <0 0x11002000 0 0x400>;
+		interrupts = <GIC_SPI 91 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&baud_clk>, <&sys_clk>;
+		clock-names = "baud", "bus";
+		status = "disabled";
 	};
 
 	pmu {
