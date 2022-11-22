@@ -2588,24 +2588,35 @@ static void mtk_drm_first_enable(struct drm_device *drm)
 	}
 }
 
-bool mtk_drm_session_mode_is_decouple_mode(struct drm_device *dev)
+static int mtk_drm_bind(struct device *dev)
 {
-	struct mtk_drm_private *priv = dev->dev_private;
+	struct mtk_drm_private *private = dev_get_drvdata(dev);
+	struct drm_device *drm;
+	int ret;
 
-	if (priv->session_mode == MTK_DRM_SESSION_DC_MIRROR)
-		return true;
+	drm = drm_dev_alloc(&mtk_drm_driver, dev);
+	if (IS_ERR(drm))
+		return PTR_ERR(drm);
 
-	return false;
-}
+	drm->dev_private = private;
+	private->drm = drm;
 
-bool mtk_drm_session_mode_is_mirror_mode(struct drm_device *dev)
-{
-	struct mtk_drm_private *priv = dev->dev_private;
+	ret = mtk_drm_kms_init(drm);
+	if (ret < 0)
+		goto err_free;
 
-	if (priv->session_mode == MTK_DRM_SESSION_DC_MIRROR)
-		return true;
+	ret = drm_dev_register(drm, 0);
+	if (ret < 0)
+		goto err_deinit;
 
-	return false;
+	return 0;
+
+err_deinit:
+	mtk_drm_kms_deinit(drm);
+err_free:
+	private->drm = NULL;
+	drm_dev_put(drm);
+	return ret;
 }
 
 struct mtk_panel_params *mtk_drm_get_lcm_ext_params(struct drm_crtc *crtc)
