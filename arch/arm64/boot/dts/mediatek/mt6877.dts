@@ -4851,7 +4851,7 @@
 	// 	compatible = "mediatek,mtboard-thermistor5";
 	// 	io-channels = <&auxadc 5>;
 	// 	io-channel-names = "thermistor-ch5";
-	// }; 
+	// };
 
 	tboard_thermistor6: thermal-sensor6 {
 		compatible = "mediatek,mtboard-thermistor6";
@@ -5919,8 +5919,8 @@
 			<&infracfg_ao_clk CLK_IFRAO_APDMA>;
 		clock-names = "main", "dma";
 		clock-div = <5>;
-		scl-gpio-id = <141>;
-		sda-gpio-id = <142>;
+		scl-gpio-id = <62>;
+		sda-gpio-id = <63>;
 		gpio_start = <0x11d10000>;
 		mem_len = <0x200>;
 		eh_cfg = <0x70>;
