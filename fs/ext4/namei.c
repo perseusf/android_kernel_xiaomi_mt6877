@@ -1286,13 +1286,14 @@ static int dx_make_map(struct inode *dir, struct buffer_head *bh,
 	unsigned int buflen = bh->b_size;
 	char *base = bh->b_data;
 	struct dx_hash_info h = *hinfo;
+	ext4_lblk_t lblk;
 
 	if (ext4_has_metadata_csum(dir->i_sb))
 		buflen -= sizeof(struct ext4_dir_entry_tail);
 
 	while ((char *) de < base + buflen) {
 		if (ext4_check_dir_entry(dir, NULL, de, bh, base, buflen,
-					 ((char *)de) - base))
+					 lblk, ((char *)de) - base))
 			return -EFSCORRUPTED;
 		if (de->name_len && de->inode) {
 			if (ext4_hash_in_dirent(dir))
@@ -2995,6 +2996,7 @@ bool ext4_empty_dir(struct inode *inode)
 	struct buffer_head *bh;
 	struct ext4_dir_entry_2 *de;
 	struct super_block *sb;
+	ext4_lblk_t lblk;
 
 	if (ext4_has_inline_data(inode)) {
 		int has_inline_data = 1;
@@ -3052,7 +3054,7 @@ bool ext4_empty_dir(struct inode *inode)
 		de = (struct ext4_dir_entry_2 *) (bh->b_data +
 					(offset & (sb->s_blocksize - 1)));
 		if (ext4_check_dir_entry(inode, NULL, de, bh,
-					 bh->b_data, bh->b_size, offset) ||
+					 bh->b_data, bh->b_size, lblk, offset) ||
 		    le32_to_cpu(de->inode)) {
 			brelse(bh);
 			return false;
@@ -3606,6 +3608,7 @@ static struct buffer_head *ext4_get_first_dir_block(handle_t *handle,
 					int *inlined)
 {
 	struct buffer_head *bh;
+	ext4_lblk_t lblk;
 
 	if (!ext4_has_inline_data(inode)) {
 		struct ext4_dir_entry_2 *de;
@@ -3622,7 +3625,7 @@ static struct buffer_head *ext4_get_first_dir_block(handle_t *handle,
 
 		de = (struct ext4_dir_entry_2 *) bh->b_data;
 		if (ext4_check_dir_entry(inode, NULL, de, bh, bh->b_data,
-					 bh->b_size, 0) ||
+					 bh->b_size, lblk, 0) ||
 		    le32_to_cpu(de->inode) != inode->i_ino ||
 		    strcmp(".", de->name)) {
 			EXT4_ERROR_INODE(inode, "directory missing '.'");
@@ -3634,7 +3637,7 @@ static struct buffer_head *ext4_get_first_dir_block(handle_t *handle,
 						inode->i_sb->s_blocksize);
 		de = ext4_next_entry(de, inode->i_sb->s_blocksize);
 		if (ext4_check_dir_entry(inode, NULL, de, bh, bh->b_data,
-					 bh->b_size, offset) ||
+					 bh->b_size, lblk, offset) ||
 		    le32_to_cpu(de->inode) == 0 || strcmp("..", de->name)) {
 			EXT4_ERROR_INODE(inode, "directory missing '..'");
 			brelse(bh);
