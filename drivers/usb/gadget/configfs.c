@@ -1544,33 +1544,6 @@ static void configfs_composite_disconnect(struct usb_gadget *gadget)
 	composite_disconnect(gadget);
 	spin_unlock_irqrestore(&gi->spinlock, flags);
 }
-#endif
-
-static void configfs_composite_unbind(struct usb_gadget *gadget)
-{
-	struct usb_composite_dev	*cdev;
-	struct gadget_info		*gi;
-	unsigned long flags;
-
-	pr_info("%s\n", __func__);
-	/* the gi->lock is hold by the caller */
-
-	cdev = get_gadget_data(gadget);
-	gi = container_of(cdev, struct gadget_info, cdev);
-	spin_lock_irqsave(&gi->spinlock, flags);
-	gi->unbind = 1;
-	spin_unlock_irqrestore(&gi->spinlock, flags);
-
-	kfree(otg_desc[0]);
-	otg_desc[0] = NULL;
-	purge_configs_funcs(gi);
-	composite_dev_cleanup(cdev);
-	usb_ep_autoconfig_reset(cdev->gadget);
-	spin_lock_irqsave(&gi->spinlock, flags);
-	cdev->gadget = NULL;
-	set_gadget_data(gadget, NULL);
-	spin_unlock_irqrestore(&gi->spinlock, flags);
-}
 
 static void configfs_composite_suspend(struct usb_gadget *gadget)
 {
@@ -1764,7 +1737,7 @@ static int android_device_create(struct gadget_info *gi)
 	struct device_attribute **attrs;
 	struct device_attribute *attr;
 
-	INIT_WORK(&gi->work, android_work);
+	//INIT_WORK(&gi->work, android_work);
 	android_device = device_create(android_class, NULL,
 				MKDEV(0, 0), NULL, "android0");
 	if (IS_ERR(android_device))
