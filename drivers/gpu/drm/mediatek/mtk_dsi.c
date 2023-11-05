@@ -2840,57 +2840,115 @@ static int mtk_preconfig_dsi_enable(struct mtk_dsi *dsi)
 	return 0;
 }
 
-static void mtk_dsi_poweroff(struct mtk_dsi *dsi)
+static void mtk_output_dsi_enable(struct mtk_dsi *dsi,
+	int force_lcm_update)
 {
-	if (WARN_ON(dsi->refcount == 0))
+	int ret;
+	struct mtk_panel_ext *ext = dsi->ext;
+	bool new_doze_state = mtk_dsi_doze_state(dsi);
+	struct drm_crtc *crtc = dsi->encoder.crtc;
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	struct mtk_crtc_state *mtk_state = to_mtk_crtc_state(crtc->state);
+	unsigned int mode_id = mtk_state->prop_val[CRTC_PROP_DISP_MODE_IDX];
+	unsigned int fps_chg_index = 0;
+#ifdef CONFIG_MI_DISP_NOTIFIER
+	int blank;
+#endif
+
+	DISP_TIME_INFO("%s + mode id: %u\n", __func__, mode_id);
+
+	if (dsi->output_en) {
+#ifdef CONFIG_MI_DISP_NOTIFIER
+		if (!new_doze_state) {
+			blank = MI_DISP_DPMS_ON;
+			g_notify_data.data = &blank;
+			g_notify_data.disp_id = MI_DISPLAY_PRIMARY;
+			mi_disp_notifier_call_chain(MI_DISP_DPMS_EVENT, &g_notify_data);
+			mi_disp_feature_event_notify_by_type(mi_get_disp_id("primary"),
+				MI_DISP_EVENT_POWER, sizeof(blank), blank);
+		}
+#endif
+		if (mtk_dsi_doze_status_change(dsi)) {
+			mtk_dsi_pre_cmd(dsi, crtc);
+			mtk_output_en_doze_switch(dsi);
+			mtk_dsi_post_cmd(dsi, crtc);
+		} else
+			DDPINFO("dsi is initialized\n");
 		return;
+	}
 
-	if (--dsi->refcount != 0)
-		return;
-
-	/*
-	 * mtk_dsi_stop() and mtk_dsi_start() is asymmetric, since
-	 * mtk_dsi_stop() should be called after mtk_drm_crtc_atomic_disable(),
-	 * which needs irq for vblank, and mtk_dsi_stop() will disable irq.
-	 * mtk_dsi_start() needs to be called in mtk_output_dsi_enable(),
-	 * after dsi is fully set.
-	 */
-	mtk_dsi_stop(dsi);
-
-	if (!mtk_dsi_switch_to_cmd_mode(dsi, VM_DONE_INT_FLAG, 500)) {
-		if (dsi->panel) {
-			if (drm_panel_unprepare(dsi->panel)) {
-				DRM_ERROR("failed to unprepare the panel\n");
-				return;
-			}
+	if (dsi->slave_dsi) {
+		ret = mtk_preconfig_dsi_enable(dsi->slave_dsi);
+		if (ret < 0) {
+			dev_err(dsi->dev, "config slave dsi fail: %d", ret);
+			return;
 		}
 	}
 
-	mtk_dsi_reset_engine(dsi);
-	mtk_dsi_lane0_ulp_mode_enter(dsi);
-	mtk_dsi_clk_ulp_mode_enter(dsi);
-	/* set the lane number as 0 to pull down mipi */
-	writel(0, dsi->regs + DSI_TXRX_CTRL);
+	if (dsi->ext && dsi->ext->funcs &&
+		dsi->ext->funcs->panel_power_on) {
+			dsi->ext->funcs->panel_power_on(dsi->panel);
+	}
 
-	mtk_dsi_disable(dsi);
-
-	clk_disable_unprepare(dsi->engine_clk);
-	clk_disable_unprepare(dsi->digital_clk);
-
-	phy_power_off(dsi->phy);
-}
-
-static void mtk_output_dsi_enable(struct mtk_dsi *dsi)
-{
-	int ret;
-
-	if (dsi->enabled)
-		return;
-
-	ret = mtk_dsi_poweron(dsi);
+	ret = mtk_preconfig_dsi_enable(dsi);
 	if (ret < 0) {
-		DRM_ERROR("failed to power on dsi\n");
+		dev_err(dsi->dev, "config dsi fail: %d", ret);
 		return;
+	}
+
+	if (dsi->panel) {
+		if ((!dsi->doze_enabled || force_lcm_update)
+			&& drm_panel_prepare(dsi->panel)) {
+			DDPPR_ERR("failed to prepare the panel\n");
+			return;
+		}
+#ifdef CONFIG_MI_DISP_ESD_CHECK
+		if (dsi->ddp_comp.mtk_crtc && dsi->ddp_comp.mtk_crtc->mi_esd_ctx) {
+			dsi->ddp_comp.mtk_crtc->mi_esd_ctx->panel_init = true;
+		}
+#endif
+		fps_chg_index = mtk_crtc->fps_change_index;
+
+		/* add for ESD recovery */
+		if ((mtk_dsi_is_cmd_mode(&dsi->ddp_comp) ||
+			fps_chg_index & DYNFPS_DSI_HFP) && mode_id != 0) {
+			if (dsi->ext && dsi->ext->funcs &&
+				dsi->ext->funcs->mode_switch) {
+				DDPMSG("%s do lcm mode_switch to %u\n",
+					__func__, mode_id);
+				dsi->ext->funcs->mode_switch(dsi->panel, 0,
+					mode_id, AFTER_DSI_POWERON);
+			}
+		}
+
+		if (new_doze_state && !dsi->doze_enabled) {
+			if (ext && ext->funcs &&
+				ext->funcs->doze_enable_start)
+				ext->funcs->doze_enable_start(dsi->panel, dsi,
+					mipi_dsi_dcs_write_gce2, NULL);
+			if (ext && ext->funcs
+				&& ext->funcs->doze_enable)
+				ext->funcs->doze_enable(dsi->panel, dsi,
+					mipi_dsi_dcs_write_gce2, NULL);
+#ifdef CONFIG_MI_DISP_FOD_SYNC
+			if (ext && ext->params && ext->params->aod_delay_enable) {
+				dsi->mi_cfg.aod_wait_frame = false;
+				reinit_completion(&dsi->aod_wait_completion);
+			}
+			if (ext && ext->params && ext->params->bl_sync_enable)
+				dsi->mi_cfg.bl_enable = false;
+#endif
+			if (ext && ext->funcs
+				&& ext->funcs->doze_area)
+				ext->funcs->doze_area(dsi->panel, dsi,
+					mipi_dsi_dcs_write_gce2, NULL);
+		}
+		if (!new_doze_state && dsi->doze_enabled) {
+			if (ext && ext->funcs
+				&& ext->funcs->doze_disable)
+				ext->funcs->doze_disable(dsi->panel, dsi,
+					mipi_dsi_dcs_write_gce2, NULL);
+		}
 	}
 
 	if (dsi->slave_dsi)
