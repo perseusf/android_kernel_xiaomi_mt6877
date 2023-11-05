@@ -1002,7 +1002,7 @@ void blk_unregister_queue(struct gendisk *disk)
 	kobject_uevent(&q->kobj, KOBJ_REMOVE);
 	kobject_del(&q->kobj);
 
-	mutex_unlock(&q->sysfs_dir_lock);
+	mutex_unlock(&q->sysfs_lock);
 
 	kobject_put(&disk_to_dev(disk)->kobj);
 }
