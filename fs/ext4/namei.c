@@ -3745,6 +3745,7 @@ static void ext4_resetent(handle_t *handle, struct ext4_renament *ent,
 {
 	struct ext4_renament old = *ent;
 	int retval = 0;
+	ext4_lblk_t lblk;
 
 	/*
 	 * old->de could have moved from under us during make indexed dir,
@@ -3752,7 +3753,7 @@ static void ext4_resetent(handle_t *handle, struct ext4_renament *ent,
 	 * before reset old inode info.
 	 */
 	old.bh = ext4_find_entry(old.dir, &old.dentry->d_name, &old.de,
-				 &old.inlined);
+				 &old.inlined, &lblk);
 	if (IS_ERR(old.bh))
 		retval = PTR_ERR(old.bh);
 	if (!old.bh)
@@ -3889,6 +3890,7 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct inode *whiteout = NULL;
 	int credits;
 	u8 old_file_type;
+	ext4_lblk_t lblk;
 
 	if (new.inode && new.inode->i_nlink == 0) {
 		EXT4_ERROR_INODE(new.inode,
@@ -3917,7 +3919,7 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 	old.bh = ext4_find_entry(old.dir, &old.dentry->d_name, &old.de,
-				 &old.inlined);
+				 &old.inlined, &lblk);
 	if (IS_ERR(old.bh))
 		return PTR_ERR(old.bh);
 	/*
